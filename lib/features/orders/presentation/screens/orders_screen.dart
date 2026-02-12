@@ -59,6 +59,8 @@ class OrdersScreen extends ConsumerWidget {
                         const SizedBox(height: 4),
                         Text('Status: $effectiveStatus'),
                         const SizedBox(height: 4),
+                        Text('Payment: ${order.paymentStatus}'),
+                        const SizedBox(height: 4),
                         Text(
                             'Subtotal: ${order.subtotal.toStringAsFixed(0)} UZS'),
                       ],

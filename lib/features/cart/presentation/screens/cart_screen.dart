@@ -116,9 +116,14 @@ class CartScreen extends ConsumerWidget {
                 const SizedBox(height: 12),
                 FilledButton(
                   onPressed: () async {
+                    final paymentMethod = await _showCheckoutDialog(context);
+                    if (paymentMethod == null || !context.mounted) return;
                     final success = await ref
                         .read(ordersControllerProvider)
-                        .checkoutFromCart(cart);
+                        .checkoutFromCartWithPaymentMethod(
+                          cart,
+                          paymentMethod: paymentMethod,
+                        );
                     if (!context.mounted) return;
                     if (success) {
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -141,6 +146,71 @@ class CartScreen extends ConsumerWidget {
           error: (e, _) => ErrorView(message: 'Failed to load cart: $e'),
         ),
       ),
+    );
+  }
+
+  Future<String?> _showCheckoutDialog(BuildContext context) {
+    const methods = <String, String>{
+      'cash_on_delivery': 'Cash on delivery',
+      'card_on_delivery': 'Card on delivery',
+      'store_pickup': 'Store pickup',
+    };
+
+    var selected = 'cash_on_delivery';
+    var agreed = false;
+
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Confirm Checkout'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Select payment method'),
+                  const SizedBox(height: 8),
+                  ...methods.entries.map((entry) {
+                    return RadioListTile<String>(
+                      value: entry.key,
+                      groupValue: selected,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(entry.value),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() => selected = value);
+                      },
+                    );
+                  }),
+                  const SizedBox(height: 8),
+                  CheckboxListTile(
+                    value: agreed,
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('I confirm this checkout'),
+                    onChanged: (value) {
+                      setState(() => agreed = value ?? false);
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: agreed
+                      ? () => Navigator.of(dialogContext).pop(selected)
+                      : null,
+                  child: const Text('Place Order'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }

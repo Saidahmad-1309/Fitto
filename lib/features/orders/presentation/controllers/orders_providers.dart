@@ -47,14 +47,37 @@ class OrdersController {
   final String? _userId;
 
   Future<bool> checkoutFromCart(Cart? cart) async {
+    return checkoutFromCartWithPaymentMethod(
+      cart,
+      paymentMethod: 'cash_on_delivery',
+    );
+  }
+
+  Future<bool> checkoutFromCartWithPaymentMethod(
+    Cart? cart, {
+    required String paymentMethod,
+  }) async {
     final userId = _userId;
     if (userId == null || cart == null || cart.isEmpty) return false;
     await _repository.createOrderFromCart(
       userId: userId,
       cart: cart,
       deliveryAddress: 'TBD',
+      paymentMethod: paymentMethod,
     );
     await _cartRepository.clearCart(userId);
     return true;
+  }
+
+  Future<void> updateOrderStatusByShop({
+    required String orderId,
+    required String shopId,
+    required String nextStatus,
+  }) {
+    return _repository.updateOrderStatusByShop(
+      orderId: orderId,
+      shopId: shopId,
+      nextStatus: nextStatus,
+    );
   }
 }

@@ -27,12 +27,21 @@ class OrderDetailScreen extends ConsumerWidget {
                 order.status.trim().isEmpty ? 'pending' : order.status;
             return ListView(
               children: [
-                Text(
-                  'Status: $effectiveStatus',
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
+                Text('Status: $effectiveStatus',
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                Text('Payment: ${_toLabel(order.paymentMethod)}'),
+                const SizedBox(height: 4),
+                Text('Payment status: ${order.paymentStatus}'),
                 const SizedBox(height: 8),
                 Text('Delivery Address: ${order.deliveryAddress}'),
+                const SizedBox(height: 12),
+                const Text(
+                  'Timeline',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                ..._buildOrderTimeline(effectiveStatus),
                 const SizedBox(height: 12),
                 const Text(
                   'Items',
@@ -64,4 +73,72 @@ class OrderDetailScreen extends ConsumerWidget {
       ),
     );
   }
+
+  String _toLabel(String method) {
+    return switch (method) {
+      'cash_on_delivery' => 'Cash on delivery',
+      'card_on_delivery' => 'Card on delivery',
+      'store_pickup' => 'Store pickup',
+      _ => method,
+    };
+  }
+
+  List<Widget> _buildOrderTimeline(String status) {
+    final normalized = status.toLowerCase();
+    final steps = <String>[
+      'pending',
+      'accepted',
+      'paid',
+      'preparing',
+      'delivered',
+    ];
+    final labels = <String, String>{
+      'pending': 'Order created',
+      'accepted': 'Accepted by shop',
+      'paid': 'Paid',
+      'preparing': 'Preparing',
+      'delivered': 'Delivered',
+    };
+
+    if (normalized == 'rejected' || normalized == 'canceled') {
+      return [
+        _timelineTile('Order created', _StepState.done),
+        _timelineTile(
+          normalized == 'rejected' ? 'Rejected' : 'Canceled',
+          _StepState.current,
+        ),
+      ];
+    }
+
+    final currentIndex = steps.indexOf(normalized).clamp(0, steps.length - 1);
+    final items = <Widget>[];
+    for (var i = 0; i < steps.length; i++) {
+      final state = i < currentIndex
+          ? _StepState.done
+          : (i == currentIndex ? _StepState.current : _StepState.pending);
+      items.add(_timelineTile(labels[steps[i]] ?? steps[i], state));
+    }
+    return items;
+  }
+
+  Widget _timelineTile(String label, _StepState state) {
+    final icon = switch (state) {
+      _StepState.done => Icons.check_circle,
+      _StepState.current => Icons.radio_button_checked,
+      _StepState.pending => Icons.radio_button_unchecked,
+    };
+    final color = switch (state) {
+      _StepState.done => Colors.green,
+      _StepState.current => Colors.blue,
+      _StepState.pending => Colors.grey,
+    };
+    return ListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(icon, color: color),
+      title: Text(label),
+    );
+  }
 }
+
+enum _StepState { done, current, pending }

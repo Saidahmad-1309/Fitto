@@ -9,7 +9,10 @@ class OrderModel {
     required this.subtotal,
     required this.status,
     required this.createdAt,
+    required this.updatedAt,
     required this.deliveryAddress,
+    required this.paymentMethod,
+    required this.paymentStatus,
   });
 
   final String id;
@@ -18,7 +21,10 @@ class OrderModel {
   final double subtotal;
   final String status;
   final DateTime createdAt;
+  final DateTime? updatedAt;
   final String deliveryAddress;
+  final String paymentMethod;
+  final String paymentStatus;
 
   factory OrderModel.fromMap(String id, Map<String, dynamic> map) {
     final rawItems = (map['items'] as List<dynamic>? ?? const []);
@@ -31,7 +37,10 @@ class OrderModel {
       subtotal: ((map['subtotal'] ?? 0) as num).toDouble(),
       status: (map['status'] ?? 'pending') as String,
       createdAt: _parseDate(map['createdAt']),
+      updatedAt: _parseNullableDate(map['updatedAt']),
       deliveryAddress: (map['deliveryAddress'] ?? '') as String,
+      paymentMethod: (map['paymentMethod'] ?? 'cash_on_delivery') as String,
+      paymentStatus: (map['paymentStatus'] ?? 'unpaid') as String,
     );
   }
 }
@@ -47,4 +56,18 @@ DateTime _parseDate(dynamic value) {
     return DateTime.fromMillisecondsSinceEpoch(value);
   }
   return DateTime.fromMillisecondsSinceEpoch(0);
+}
+
+DateTime? _parseNullableDate(dynamic value) {
+  if (value == null) return null;
+  if (value is Timestamp) {
+    return value.toDate();
+  }
+  if (value is String) {
+    return DateTime.tryParse(value);
+  }
+  if (value is int) {
+    return DateTime.fromMillisecondsSinceEpoch(value);
+  }
+  return null;
 }

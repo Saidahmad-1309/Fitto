@@ -36,6 +36,7 @@ class OrdersRepository {
     required String userId,
     required Cart cart,
     required String deliveryAddress,
+    required String paymentMethod,
   }) async {
     final validItems = cart.items.where((item) {
       return item.shopId.trim().isNotEmpty &&
@@ -64,6 +65,8 @@ class OrdersRepository {
       'items': validItems.map((item) => item.toMap()).toList(),
       'subtotal': cart.subtotal,
       'status': 'pending',
+      'paymentMethod': paymentMethod,
+      'paymentStatus': 'unpaid',
       'shopIds': shopIds,
       'statusSummary': {
         'total': requestCount,
@@ -105,6 +108,79 @@ class OrdersRepository {
     }
 
     await batch.commit();
+  }
+
+  Future<void> updateOrderStatusByShop({
+    required String orderId,
+    required String shopId,
+    required String nextStatus,
+  }) async {
+    final normalizedOrderId = orderId.trim();
+    final normalizedShopId = shopId.trim();
+    final normalizedStatus = nextStatus.trim().toLowerCase();
+    if (normalizedOrderId.isEmpty ||
+        normalizedShopId.isEmpty ||
+        normalizedStatus.isEmpty) {
+      throw ArgumentError('orderId, shopId and nextStatus are required.');
+    }
+
+    final allowedStatuses = {'preparing', 'delivered', 'canceled'};
+    if (!allowedStatuses.contains(normalizedStatus)) {
+      throw StateError('Unsupported order status: $normalizedStatus');
+    }
+
+    final orderRef = _firestore.collection('orders').doc(normalizedOrderId);
+    await _firestore.runTransaction((tx) async {
+      final orderSnap = await tx.get(orderRef);
+      if (!orderSnap.exists) {
+        throw StateError('Order not found.');
+      }
+
+      final data = orderSnap.data() ?? const <String, dynamic>{};
+      final currentStatus = (data['status'] ?? 'pending').toString().toLowerCase();
+      final shopIds = _readStringSet(data['shopIds']);
+      final orderShopId = (data['shopId'] ?? '').toString().trim();
+      final linked = shopIds.contains(normalizedShopId) || orderShopId == normalizedShopId;
+      if (!linked) {
+        throw StateError('Order is not linked to this shop.');
+      }
+
+      if (normalizedStatus == 'preparing') {
+        if (currentStatus != 'paid' && currentStatus != 'accepted') {
+          throw StateError('Only paid/accepted orders can be moved to preparing.');
+        }
+      } else if (normalizedStatus == 'delivered') {
+        if (currentStatus != 'preparing') {
+          throw StateError('Only preparing orders can be delivered.');
+        }
+      } else if (normalizedStatus == 'canceled') {
+        if (currentStatus == 'delivered') {
+          throw StateError('Delivered orders cannot be canceled.');
+        }
+      }
+
+      tx.set(
+        orderRef,
+        {
+          'status': normalizedStatus,
+          'updatedAt': FieldValue.serverTimestamp(),
+          'statusUpdatedByShopId': normalizedShopId,
+          'statusUpdatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+    });
+  }
+
+  Set<String> _readStringSet(dynamic value) {
+    final result = <String>{};
+    if (value is List) {
+      for (final element in value) {
+        final normalized = element.toString().trim();
+        if (normalized.isNotEmpty) result.add(normalized);
+      }
+    }
+    return result;
   }
 
   String _normalizeSize(String value) {

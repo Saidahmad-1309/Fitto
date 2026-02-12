@@ -6,6 +6,7 @@ import 'package:fitto/core/widgets/error_view.dart';
 import 'package:fitto/core/widgets/loading_view.dart';
 import 'package:fitto/features/auth/presentation/controllers/auth_providers.dart';
 import 'package:fitto/features/inventory/presentation/screens/shop_inventory_screen.dart';
+import 'package:fitto/features/orders/presentation/controllers/orders_providers.dart';
 import 'package:fitto/features/products/data/models/product.dart';
 import 'package:fitto/features/products/presentation/controllers/products_providers.dart';
 import 'package:fitto/features/purchase_requests/data/models/purchase_request.dart';
@@ -357,6 +358,43 @@ class _ShopPortalScreenState extends ConsumerState<ShopPortalScreen> {
                         child: Text(busy ? 'Working...' : 'Reject'),
                       ),
                     ],
+                    if (request.status.toLowerCase() == 'paid' &&
+                        request.orderId != null &&
+                        request.orderId!.trim().isNotEmpty) ...[
+                      FilledButton.tonal(
+                        onPressed: busy
+                            ? null
+                            : () => _updateShopOrderStatus(
+                                  requestId: request.id,
+                                  orderId: request.orderId!,
+                                  shopId: request.shopId ?? '',
+                                  nextStatus: 'preparing',
+                                ),
+                        child: const Text('Preparing'),
+                      ),
+                      FilledButton.tonal(
+                        onPressed: busy
+                            ? null
+                            : () => _updateShopOrderStatus(
+                                  requestId: request.id,
+                                  orderId: request.orderId!,
+                                  shopId: request.shopId ?? '',
+                                  nextStatus: 'delivered',
+                                ),
+                        child: const Text('Delivered'),
+                      ),
+                      OutlinedButton(
+                        onPressed: busy
+                            ? null
+                            : () => _updateShopOrderStatus(
+                                  requestId: request.id,
+                                  orderId: request.orderId!,
+                                  shopId: request.shopId ?? '',
+                                  nextStatus: 'canceled',
+                                ),
+                        child: const Text('Cancel Order'),
+                      ),
+                    ],
                   ],
                 ),
               ],
@@ -458,6 +496,45 @@ class _ShopPortalScreenState extends ConsumerState<ShopPortalScreen> {
               : message;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to update request: $normalizedMessage')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _requestActionInProgress = null);
+      }
+    }
+  }
+
+  Future<void> _updateShopOrderStatus({
+    required String requestId,
+    required String orderId,
+    required String shopId,
+    required String nextStatus,
+  }) async {
+    final normalizedOrderId = orderId.trim();
+    final normalizedShopId = shopId.trim();
+    if (normalizedOrderId.isEmpty || normalizedShopId.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Order/shop information is missing.')),
+      );
+      return;
+    }
+
+    setState(() => _requestActionInProgress = requestId);
+    try {
+      await ref.read(ordersControllerProvider).updateOrderStatusByShop(
+            orderId: normalizedOrderId,
+            shopId: normalizedShopId,
+            nextStatus: nextStatus,
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Order moved to $nextStatus.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update order: $e')),
       );
     } finally {
       if (mounted) {
