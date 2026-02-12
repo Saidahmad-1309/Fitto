@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "882420750824",
+    "project_id": "fitto-63d9e",
+    "storage_bucket": "fitto-63d9e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:882420750824:android:e84cff5206cc73ec0c6c5d",
+        "android_client_info": {
+          "package_name": "com.fitto.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "882420750824-odo2t7gp8tq94uq9bcdmmoqem6rdeh7n.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.fitto.app",
+            "certificate_hash": "60fd93e1e42056ef6dce2de7c025633aef487b62"
+          }
+        },
+        {
+          "client_id": "882420750824-jn2efci3a3t56vno9u28p6ocuqafgtsc.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDX-DPtLZWe8bxRxkUDFWDieaJRiozTH4c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "882420750824-jn2efci3a3t56vno9u28p6ocuqafgtsc.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

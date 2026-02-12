@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "441746669202",
+    "project_id": "stylebridgeai",
+    "storage_bucket": "stylebridgeai.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:441746669202:android:a3c5eb3e468aa19f10304b",
+        "android_client_info": {
+          "package_name": "com.example.stylebridge_ai"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "441746669202-iog4v52faariri2vidlq127rnq6tk9q4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.stylebridge_ai",
+            "certificate_hash": "60fd93e1e42056ef6dce2de7c025633aef487b62"
+          }
+        },
+        {
+          "client_id": "441746669202-6r4utq18ga2a80mlej10ke45246f9mde.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyByg6BSwvIyqE_q6rMWlHMB6qcj1rfB42w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "441746669202-6r4utq18ga2a80mlej10ke45246f9mde.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "441746669202-hn176gjjg8cj8814k666u12tjbshnflj.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.stylebridgeAi"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

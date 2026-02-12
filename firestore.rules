@@ -1,0 +1,189 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function userDoc(uid) {
+      return get(/databases/$(database)/documents/users/$(uid));
+    }
+
+    function userExists(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid));
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+        userExists(request.auth.uid) &&
+        userDoc(request.auth.uid).data.role == "admin";
+    }
+
+    function linkedShopId() {
+      return (
+        isSignedIn() &&
+        exists(/databases/$(database)/documents/shop_users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/shop_users/$(request.auth.uid)).data.shopId is string
+      )
+        ? get(/databases/$(database)/documents/shop_users/$(request.auth.uid)).data.shopId
+        : "";
+    }
+
+    function isShopMember(shopId) {
+      return isAdmin() || (
+        isSignedIn() &&
+        shopId is string &&
+        shopId.size() > 0 &&
+        (
+          (
+            exists(/databases/$(database)/documents/shop_users/$(request.auth.uid)) &&
+            get(/databases/$(database)/documents/shop_users/$(request.auth.uid)).data.shopId is string &&
+            get(/databases/$(database)/documents/shop_users/$(request.auth.uid)).data.shopId == shopId
+          ) ||
+          (
+            exists(/databases/$(database)/documents/shop_users/$(shopId + "_" + request.auth.uid)) &&
+            get(/databases/$(database)/documents/shop_users/$(shopId + "_" + request.auth.uid)).data.uid is string &&
+            get(/databases/$(database)/documents/shop_users/$(shopId + "_" + request.auth.uid)).data.uid == request.auth.uid &&
+            get(/databases/$(database)/documents/shop_users/$(shopId + "_" + request.auth.uid)).data.shopId is string &&
+            get(/databases/$(database)/documents/shop_users/$(shopId + "_" + request.auth.uid)).data.shopId == shopId
+          ) ||
+          (
+            exists(/databases/$(database)/documents/shop_users/$(request.auth.uid + "_" + shopId)) &&
+            get(/databases/$(database)/documents/shop_users/$(request.auth.uid + "_" + shopId)).data.uid is string &&
+            get(/databases/$(database)/documents/shop_users/$(request.auth.uid + "_" + shopId)).data.uid == request.auth.uid &&
+            get(/databases/$(database)/documents/shop_users/$(request.auth.uid + "_" + shopId)).data.shopId is string &&
+            get(/databases/$(database)/documents/shop_users/$(request.auth.uid + "_" + shopId)).data.shopId == shopId
+          )
+        )
+      );
+    }
+
+    function requestProductShopId() {
+      return request.resource.data.shopId is string
+        ? request.resource.data.shopId
+        : "";
+    }
+
+    function resourceProductShopId() {
+      return resource.data.shopId is string
+        ? resource.data.shopId
+        : "";
+    }
+
+    function canAccessOrderByShop(orderData) {
+      return linkedShopId() != "" && (
+        (orderData.shopId is string && orderData.shopId == linkedShopId()) ||
+        (orderData.shopIds is list && orderData.shopIds.hasAny([linkedShopId()]))
+      );
+    }
+
+    match /users/{uid} {
+      allow read: if isSelf(uid) || isAdmin();
+
+      allow create: if isSelf(uid) && request.resource.data.uid == uid;
+
+      allow update: if isAdmin() || (
+        isSelf(uid) &&
+        request.resource.data.uid == resource.data.uid &&
+        (
+          !request.resource.data.keys().hasAny(["role"]) ||
+          request.resource.data.role == resource.data.role
+        )
+      );
+
+      allow delete: if false;
+
+      match /fcm_tokens/{tokenId} {
+        allow read, create, update, delete: if isSelf(uid);
+      }
+    }
+
+    match /shop_applications/{applicationId} {
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn() &&
+        request.resource.data.ownerUid == request.auth.uid &&
+        request.resource.data.status == "pending";
+
+      allow update, delete: if isAdmin();
+    }
+
+    match /shops/{shopId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /shop_users/{mappingId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /products/{productId} {
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn() &&
+        requestProductShopId() != "" &&
+        isShopMember(requestProductShopId());
+
+      allow update, delete: if isSignedIn() &&
+        resourceProductShopId() != "" &&
+        isShopMember(resourceProductShopId());
+    }
+
+    match /carts/{uid} {
+      allow read, create, update, delete: if isSelf(uid);
+    }
+
+    match /orders/{orderId} {
+      allow create: if isSignedIn() &&
+        request.resource.data.userId == request.auth.uid;
+
+      allow read: if isAdmin() ||
+        (isSignedIn() && (
+          resource.data.userId == request.auth.uid ||
+          canAccessOrderByShop(resource.data)
+        ));
+
+      allow update: if isAdmin() ||
+        (isSignedIn() && (
+          resource.data.userId == request.auth.uid ||
+          canAccessOrderByShop(resource.data)
+        ));
+
+      allow delete: if false;
+    }
+
+    match /purchase_requests/{requestId} {
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.shopId is string &&
+        request.resource.data.orderId is string &&
+        request.resource.data.productId is string &&
+        request.resource.data.size is string &&
+        request.resource.data.quantity is int &&
+        request.resource.data.quantity > 0;
+
+      allow update: if isAdmin() || (
+        isSignedIn() &&
+        (
+          resource.data.userId == request.auth.uid ||
+          isShopMember(resource.data.shopId)
+        ) &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.shopId == resource.data.shopId &&
+        request.resource.data.orderId == resource.data.orderId &&
+        request.resource.data.productId == resource.data.productId &&
+        request.resource.data.size == resource.data.size &&
+        request.resource.data.quantity == resource.data.quantity
+      );
+
+      allow delete: if false;
+    }
+  }
+}
