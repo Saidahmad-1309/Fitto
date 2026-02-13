@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fitto/features/cart/presentation/screens/cart_screen.dart';
@@ -89,23 +88,6 @@ class HomeScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (kDebugMode) ...[
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(8),
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(
-                      color:
-                          Theme.of(context).colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      'DEBUG: ${currentUserDoc?.email ?? authUser.email ?? '-'} | '
-                      '${currentUserDoc?.uid ?? authUser.uid} | role=$role',
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ),
-                ],
                 const Text(
                   'Welcome to Fitto',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),

@@ -6,12 +6,9 @@ import 'package:fitto/core/widgets/error_view.dart';
 import 'package:fitto/core/widgets/loading_view.dart';
 import 'package:fitto/features/auth/presentation/controllers/auth_providers.dart';
 import 'package:fitto/features/inventory/presentation/screens/shop_inventory_screen.dart';
-import 'package:fitto/features/orders/presentation/controllers/orders_providers.dart';
 import 'package:fitto/features/products/data/models/product.dart';
 import 'package:fitto/features/products/presentation/controllers/products_providers.dart';
-import 'package:fitto/features/purchase_requests/data/models/purchase_request.dart';
-import 'package:fitto/features/purchase_requests/presentation/controllers/purchase_requests_providers.dart';
-import 'package:fitto/features/purchase_requests/presentation/screens/purchase_request_details_screen.dart';
+import 'package:fitto/features/shop_onboarding/presentation/screens/shop_orders_screen.dart';
 
 import '../controllers/shop_onboarding_providers.dart';
 
@@ -28,12 +25,8 @@ class _ShopPortalScreenState extends ConsumerState<ShopPortalScreen> {
   final _categoryController = TextEditingController();
   final _descriptionController = TextEditingController();
   final Set<String> _selectedSizes = <String>{'M'};
-  final ScrollController _scrollController = ScrollController();
-  final GlobalKey _incomingRequestsSectionKey = GlobalKey();
 
   bool _submitting = false;
-  String? _requestActionInProgress;
-  final Set<String> _expiringRequestIds = <String>{};
 
   @override
   void dispose() {
@@ -41,7 +34,6 @@ class _ShopPortalScreenState extends ConsumerState<ShopPortalScreen> {
     _priceController.dispose();
     _categoryController.dispose();
     _descriptionController.dispose();
-    _scrollController.dispose();
     super.dispose();
   }
 
@@ -69,12 +61,7 @@ class _ShopPortalScreenState extends ConsumerState<ShopPortalScreen> {
             }
 
             final productsAsync = ref.watch(shopProductsProvider(link.shopId));
-            final requestsAsync = ref.watch(
-              shopPurchaseRequestsProvider(link.shopId),
-            );
-
             return SingleChildScrollView(
-              controller: _scrollController,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -99,7 +86,14 @@ class _ShopPortalScreenState extends ConsumerState<ShopPortalScreen> {
                       ),
                       const SizedBox(width: 10),
                       OutlinedButton.icon(
-                        onPressed: _scrollToIncomingRequests,
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) =>
+                                  ShopOrdersScreen(shopId: link.shopId),
+                            ),
+                          );
+                        },
                         icon: const Icon(Icons.receipt_long_outlined),
                         label: const Text('Orders'),
                       ),
@@ -148,26 +142,6 @@ class _ShopPortalScreenState extends ConsumerState<ShopPortalScreen> {
                         const LoadingView(message: 'Loading products...'),
                     error: (e, _) =>
                         ErrorView(message: 'Failed to load products: $e'),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    key: _incomingRequestsSectionKey,
-                    child: const Text(
-                      'Incoming Requests',
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  requestsAsync.when(
-                    data: (requests) {
-                      _synchronizeExpiredRequests(requests);
-                      return _buildIncomingRequests(requests);
-                    },
-                    loading: () =>
-                        const LoadingView(message: 'Loading requests...'),
-                    error: (e, _) =>
-                        ErrorView(message: 'Failed to load requests: $e'),
                   ),
                   const SizedBox(height: 16),
                 ],
@@ -279,143 +253,6 @@ class _ShopPortalScreenState extends ConsumerState<ShopPortalScreen> {
     );
   }
 
-  Widget _buildIncomingRequests(List<PurchaseRequest> requests) {
-    if (requests.isEmpty) {
-      return const EmptyState(
-        title: 'No incoming requests',
-        subtitle: 'Customer requests for your shop will appear here.',
-      );
-    }
-
-    return ListView.separated(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: requests.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (context, index) {
-        final request = requests[index];
-        final busy = _requestActionInProgress == request.id;
-
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  request.title,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text('Status: ${request.status}'),
-                const SizedBox(height: 4),
-                Text('Created: ${request.createdAt.toIso8601String()}'),
-                const SizedBox(height: 4),
-                Text('Size: ${request.size}  Qty: ${request.quantity}'),
-                if (request.description.trim().isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Text(request.description),
-                ],
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    OutlinedButton(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => PurchaseRequestDetailsScreen(
-                              requestId: request.id,
-                              showPaymentActions: false,
-                            ),
-                          ),
-                        );
-                      },
-                      child: const Text('Details'),
-                    ),
-                    if (request.status.toLowerCase() == 'pending' ||
-                        request.status.toLowerCase() == 'requested') ...[
-                      FilledButton(
-                        onPressed: busy
-                            ? null
-                            : () => _handleRequestStatus(
-                                  requestId: request.id,
-                                  approve: true,
-                                ),
-                        child: Text(busy ? 'Working...' : 'Accept'),
-                      ),
-                      FilledButton.tonal(
-                        onPressed: busy
-                            ? null
-                            : () => _handleRequestStatus(
-                                  requestId: request.id,
-                                  approve: false,
-                                ),
-                        child: Text(busy ? 'Working...' : 'Reject'),
-                      ),
-                    ],
-                    if (request.status.toLowerCase() == 'paid' &&
-                        request.orderId != null &&
-                        request.orderId!.trim().isNotEmpty) ...[
-                      FilledButton.tonal(
-                        onPressed: busy
-                            ? null
-                            : () => _updateShopOrderStatus(
-                                  requestId: request.id,
-                                  orderId: request.orderId!,
-                                  shopId: request.shopId ?? '',
-                                  nextStatus: 'preparing',
-                                ),
-                        child: const Text('Preparing'),
-                      ),
-                      FilledButton.tonal(
-                        onPressed: busy
-                            ? null
-                            : () => _updateShopOrderStatus(
-                                  requestId: request.id,
-                                  orderId: request.orderId!,
-                                  shopId: request.shopId ?? '',
-                                  nextStatus: 'delivered',
-                                ),
-                        child: const Text('Delivered'),
-                      ),
-                      OutlinedButton(
-                        onPressed: busy
-                            ? null
-                            : () => _updateShopOrderStatus(
-                                  requestId: request.id,
-                                  orderId: request.orderId!,
-                                  shopId: request.shopId ?? '',
-                                  nextStatus: 'canceled',
-                                ),
-                        child: const Text('Cancel Order'),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _scrollToIncomingRequests() {
-    final context = _incomingRequestsSectionKey.currentContext;
-    if (context == null) return;
-    Scrollable.ensureVisible(
-      context,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOut,
-      alignment: 0.1,
-    );
-  }
-
   Future<void> _createProduct(String shopId) async {
     final name = _nameController.text.trim();
     final category = _categoryController.text.trim();
@@ -466,98 +303,6 @@ class _ShopPortalScreenState extends ConsumerState<ShopPortalScreen> {
       );
     } finally {
       if (mounted) setState(() => _submitting = false);
-    }
-  }
-
-  Future<void> _handleRequestStatus({
-    required String requestId,
-    required bool approve,
-  }) async {
-    setState(() => _requestActionInProgress = requestId);
-    try {
-      final actions = ref.read(purchaseRequestActionsProvider);
-      if (approve) {
-        await actions.accept(requestId);
-      } else {
-        await actions.reject(requestId);
-      }
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(approve ? 'Request accepted.' : 'Request rejected.'),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      final message = e.toString();
-      final normalizedMessage =
-          message.contains('Transactions require all reads')
-              ? 'Please hot restart the app once, then try again.'
-              : message;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update request: $normalizedMessage')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _requestActionInProgress = null);
-      }
-    }
-  }
-
-  Future<void> _updateShopOrderStatus({
-    required String requestId,
-    required String orderId,
-    required String shopId,
-    required String nextStatus,
-  }) async {
-    final normalizedOrderId = orderId.trim();
-    final normalizedShopId = shopId.trim();
-    if (normalizedOrderId.isEmpty || normalizedShopId.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Order/shop information is missing.')),
-      );
-      return;
-    }
-
-    setState(() => _requestActionInProgress = requestId);
-    try {
-      await ref.read(ordersControllerProvider).updateOrderStatusByShop(
-            orderId: normalizedOrderId,
-            shopId: normalizedShopId,
-            nextStatus: nextStatus,
-          );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Order moved to $nextStatus.')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update order: $e')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _requestActionInProgress = null);
-      }
-    }
-  }
-
-  void _synchronizeExpiredRequests(List<PurchaseRequest> requests) {
-    for (final request in requests) {
-      if (!request.isAccepted || !request.isExpired) continue;
-      if (_expiringRequestIds.contains(request.id)) continue;
-      _expiringRequestIds.add(request.id);
-
-      Future<void>.microtask(() async {
-        try {
-          await ref.read(purchaseRequestActionsProvider).expire(request.id);
-        } catch (_) {
-          // Silent by design: stream refresh will retry on next update.
-        } finally {
-          _expiringRequestIds.remove(request.id);
-        }
-      });
     }
   }
 
@@ -637,3 +382,4 @@ class _ShopPortalScreenState extends ConsumerState<ShopPortalScreen> {
     descCtrl.dispose();
   }
 }
+

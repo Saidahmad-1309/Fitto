@@ -161,8 +161,8 @@ class OrdersRepository {
       }
 
       if (normalizedStatus == 'preparing') {
-        if (currentStatus != 'paid' && currentStatus != 'accepted') {
-          throw StateError('Only paid/accepted orders can be moved to preparing.');
+        if (currentStatus != 'paid') {
+          throw StateError('Only paid orders can be moved to preparing.');
         }
       } else if (normalizedStatus == 'delivered') {
         if (currentStatus != 'preparing') {
