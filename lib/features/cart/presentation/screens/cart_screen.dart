@@ -151,12 +151,11 @@ class CartScreen extends ConsumerWidget {
 
   Future<String?> _showCheckoutDialog(BuildContext context) {
     const methods = <String, String>{
-      'cash_on_delivery': 'Cash on delivery',
-      'card_on_delivery': 'Card on delivery',
+      'online_payment': 'Online payment',
       'store_pickup': 'Store pickup',
     };
 
-    var selected = 'cash_on_delivery';
+    var selected = 'online_payment';
     var agreed = false;
 
     return showDialog<String>(
@@ -170,20 +169,24 @@ class CartScreen extends ConsumerWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Select payment method'),
+                  const Text('Select fulfillment method'),
                   const SizedBox(height: 8),
-                  ...methods.entries.map((entry) {
-                    return RadioListTile<String>(
-                      value: entry.key,
-                      groupValue: selected,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(entry.value),
-                      onChanged: (value) {
-                        if (value == null) return;
-                        setState(() => selected = value);
-                      },
-                    );
-                  }),
+                  RadioGroup<String>(
+                    groupValue: selected,
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() => selected = value);
+                    },
+                    child: Column(
+                      children: methods.entries.map((entry) {
+                        return RadioListTile<String>(
+                          value: entry.key,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(entry.value),
+                        );
+                      }).toList(growable: false),
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   CheckboxListTile(
                     value: agreed,

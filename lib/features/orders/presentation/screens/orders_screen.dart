@@ -47,8 +47,7 @@ class OrdersScreen extends ConsumerWidget {
               separatorBuilder: (_, __) => const SizedBox(height: 10),
               itemBuilder: (context, index) {
                 final order = orders[index];
-                final effectiveStatus =
-                    order.status.trim().isEmpty ? 'pending' : order.status;
+                final effectiveStatus = order.resolvedStatus;
                 return Card(
                   child: ListTile(
                     title:

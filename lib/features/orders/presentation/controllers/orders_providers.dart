@@ -18,8 +18,8 @@ final ordersStreamProvider = StreamProvider<List<OrderModel>>((ref) {
 });
 
 final orderDetailProvider =
-    FutureProvider.family<OrderModel?, String>((ref, orderId) {
-  return ref.watch(ordersRepositoryProvider).getOrder(orderId);
+    StreamProvider.family<OrderModel?, String>((ref, orderId) {
+  return ref.watch(ordersRepositoryProvider).watchOrder(orderId);
 });
 
 final ordersControllerProvider = Provider<OrdersController>((ref) {
@@ -49,7 +49,7 @@ class OrdersController {
   Future<bool> checkoutFromCart(Cart? cart) async {
     return checkoutFromCartWithPaymentMethod(
       cart,
-      paymentMethod: 'cash_on_delivery',
+      paymentMethod: 'online_payment',
     );
   }
 

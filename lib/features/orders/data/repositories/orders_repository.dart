@@ -32,6 +32,21 @@ class OrdersRepository {
     return OrderModel.fromMap(doc.id, data);
   }
 
+  Stream<OrderModel?> watchOrder(String orderId) {
+    final normalizedId = orderId.trim();
+    if (normalizedId.isEmpty) {
+      return Stream.value(null);
+    }
+    return _firestore.collection('orders').doc(normalizedId).snapshots().map(
+      (doc) {
+        if (!doc.exists) return null;
+        final data = doc.data();
+        if (data == null) return null;
+        return OrderModel.fromMap(doc.id, data);
+      },
+    );
+  }
+
   Future<void> createOrderFromCart({
     required String userId,
     required Cart cart,

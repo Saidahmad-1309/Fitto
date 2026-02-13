@@ -23,8 +23,7 @@ class OrderDetailScreen extends ConsumerWidget {
             if (order == null) {
               return const Center(child: Text('Order not found.'));
             }
-            final effectiveStatus =
-                order.status.trim().isEmpty ? 'pending' : order.status;
+            final effectiveStatus = order.resolvedStatus;
             return ListView(
               children: [
                 Text('Status: $effectiveStatus',
@@ -76,8 +75,7 @@ class OrderDetailScreen extends ConsumerWidget {
 
   String _toLabel(String method) {
     return switch (method) {
-      'cash_on_delivery' => 'Cash on delivery',
-      'card_on_delivery' => 'Card on delivery',
+      'online_payment' => 'Online payment',
       'store_pickup' => 'Store pickup',
       _ => method,
     };
@@ -110,7 +108,9 @@ class OrderDetailScreen extends ConsumerWidget {
       ];
     }
 
-    final currentIndex = steps.indexOf(normalized).clamp(0, steps.length - 1);
+    final timelineStatus = normalized == 'processing' ? 'accepted' : normalized;
+    final currentIndex =
+        steps.indexOf(timelineStatus).clamp(0, steps.length - 1);
     final items = <Widget>[];
     for (var i = 0; i < steps.length; i++) {
       final state = i < currentIndex
