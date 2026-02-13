@@ -367,11 +367,17 @@ class PurchaseRequestsRepository {
           fromStatus: currentStatus,
           toStatus: resolvedStatus,
         );
-        final nextOrderStatus = _deriveOrderStatusFromSummary(summary);
+        final currentOrderStatus = _normalizeStatus(orderData['status']);
+        final nextOrderStatus = _resolveOrderStatus(
+          currentOrderStatus: currentOrderStatus,
+          summary: summary,
+        );
+        final nextPaymentStatus = _derivePaymentStatusFromSummary(summary);
         tx.set(
           orderRef,
           {
             'status': nextOrderStatus,
+            'paymentStatus': nextPaymentStatus,
             'shopIds': shopIds.toList(growable: false),
             'lastRequestUpdateId': normalizedRequestId,
             'lastRequestStatus': resolvedStatus,
@@ -640,7 +646,12 @@ class PurchaseRequestsRepository {
       fromStatus: currentStatus,
       toStatus: resolvedStatus,
     );
-    final nextOrderStatus = _deriveOrderStatusFromSummary(summary);
+    final currentOrderStatus = _normalizeStatus(orderData['status']);
+    final nextOrderStatus = _resolveOrderStatus(
+      currentOrderStatus: currentOrderStatus,
+      summary: summary,
+    );
+    final nextPaymentStatus = _derivePaymentStatusFromSummary(summary);
 
     final batch = _firestore.batch();
     if (productRef != null && productUpdatePayload != null) {
@@ -651,6 +662,7 @@ class PurchaseRequestsRepository {
         orderRef,
         {
           'status': nextOrderStatus,
+          'paymentStatus': nextPaymentStatus,
           'shopIds': shopIds.toList(growable: false),
           'lastRequestUpdateId': requestId,
           'lastRequestStatus': resolvedStatus,
@@ -854,6 +866,21 @@ class PurchaseRequestsRepository {
     return next;
   }
 
+  String _resolveOrderStatus({
+    required String currentOrderStatus,
+    required Map<String, dynamic> summary,
+  }) {
+    const terminalOrManual = <String>{
+      'preparing',
+      'delivered',
+      'canceled',
+    };
+    if (terminalOrManual.contains(currentOrderStatus)) {
+      return currentOrderStatus;
+    }
+    return _deriveOrderStatusFromSummary(summary);
+  }
+
   String _deriveOrderStatusFromSummary(Map<String, dynamic> summary) {
     final total = summary['total'] as int? ?? 0;
     final pending = summary['pending'] as int? ?? 0;
@@ -882,6 +909,14 @@ class PurchaseRequestsRepository {
     }
 
     return 'pending';
+  }
+
+  String _derivePaymentStatusFromSummary(Map<String, dynamic> summary) {
+    final total = summary['total'] as int? ?? 0;
+    final paid = summary['paid'] as int? ?? 0;
+    if (total <= 0 || paid <= 0) return 'unpaid';
+    if (paid >= total) return 'paid';
+    return 'partial';
   }
 
   String _normalizeStatus(dynamic value) {

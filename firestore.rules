@@ -23,7 +23,7 @@ service cloud.firestore {
         userDoc(request.auth.uid).data.role == "admin";
     }
 
-    function linkedShopId() {
+    function directLinkedShopId() {
       return (
         isSignedIn() &&
         exists(/databases/$(database)/documents/shop_users/$(request.auth.uid)) &&
@@ -31,6 +31,39 @@ service cloud.firestore {
       )
         ? get(/databases/$(database)/documents/shop_users/$(request.auth.uid)).data.shopId
         : "";
+    }
+
+    function userDocLinkedShopId() {
+      return (
+        isSignedIn() &&
+        userExists(request.auth.uid) &&
+        userDoc(request.auth.uid).data.shopId is string
+      )
+        ? userDoc(request.auth.uid).data.shopId
+        : "";
+    }
+
+    function linkedShopId() {
+      return directLinkedShopId() != ""
+        ? directLinkedShopId()
+        : userDocLinkedShopId();
+    }
+
+    function hasCompositeShopUserLink(shopId) {
+      return (
+        exists(/databases/$(database)/documents/shop_users/$(shopId + "_" + request.auth.uid)) &&
+        get(/databases/$(database)/documents/shop_users/$(shopId + "_" + request.auth.uid)).data.uid is string &&
+        get(/databases/$(database)/documents/shop_users/$(shopId + "_" + request.auth.uid)).data.uid == request.auth.uid &&
+        get(/databases/$(database)/documents/shop_users/$(shopId + "_" + request.auth.uid)).data.shopId is string &&
+        get(/databases/$(database)/documents/shop_users/$(shopId + "_" + request.auth.uid)).data.shopId == shopId
+      ) ||
+      (
+        exists(/databases/$(database)/documents/shop_users/$(request.auth.uid + "_" + shopId)) &&
+        get(/databases/$(database)/documents/shop_users/$(request.auth.uid + "_" + shopId)).data.uid is string &&
+        get(/databases/$(database)/documents/shop_users/$(request.auth.uid + "_" + shopId)).data.uid == request.auth.uid &&
+        get(/databases/$(database)/documents/shop_users/$(request.auth.uid + "_" + shopId)).data.shopId is string &&
+        get(/databases/$(database)/documents/shop_users/$(request.auth.uid + "_" + shopId)).data.shopId == shopId
+      );
     }
 
     function isShopMember(shopId) {
@@ -43,21 +76,20 @@ service cloud.firestore {
             exists(/databases/$(database)/documents/shop_users/$(request.auth.uid)) &&
             get(/databases/$(database)/documents/shop_users/$(request.auth.uid)).data.shopId is string &&
             get(/databases/$(database)/documents/shop_users/$(request.auth.uid)).data.shopId == shopId
-          ) ||
-          (
-            exists(/databases/$(database)/documents/shop_users/$(shopId + "_" + request.auth.uid)) &&
-            get(/databases/$(database)/documents/shop_users/$(shopId + "_" + request.auth.uid)).data.uid is string &&
-            get(/databases/$(database)/documents/shop_users/$(shopId + "_" + request.auth.uid)).data.uid == request.auth.uid &&
-            get(/databases/$(database)/documents/shop_users/$(shopId + "_" + request.auth.uid)).data.shopId is string &&
-            get(/databases/$(database)/documents/shop_users/$(shopId + "_" + request.auth.uid)).data.shopId == shopId
-          ) ||
-          (
-            exists(/databases/$(database)/documents/shop_users/$(request.auth.uid + "_" + shopId)) &&
-            get(/databases/$(database)/documents/shop_users/$(request.auth.uid + "_" + shopId)).data.uid is string &&
-            get(/databases/$(database)/documents/shop_users/$(request.auth.uid + "_" + shopId)).data.uid == request.auth.uid &&
-            get(/databases/$(database)/documents/shop_users/$(request.auth.uid + "_" + shopId)).data.shopId is string &&
-            get(/databases/$(database)/documents/shop_users/$(request.auth.uid + "_" + shopId)).data.shopId == shopId
-          )
+          ) || hasCompositeShopUserLink(shopId) || linkedShopId() == shopId
+        )
+      );
+    }
+
+    function isApprovedShop(shopId) {
+      return (
+        shopId is string &&
+        shopId.size() > 0 &&
+        exists(/databases/$(database)/documents/shops/$(shopId)) &&
+        (
+          get(/databases/$(database)/documents/shops/$(shopId)).data.approved == true ||
+          get(/databases/$(database)/documents/shops/$(shopId)).data.isApproved == true ||
+          get(/databases/$(database)/documents/shops/$(shopId)).data.isActive == true
         )
       );
     }
@@ -75,9 +107,13 @@ service cloud.firestore {
     }
 
     function canAccessOrderByShop(orderData) {
-      return linkedShopId() != "" && (
-        (orderData.shopId is string && orderData.shopId == linkedShopId()) ||
-        (orderData.shopIds is list && orderData.shopIds.hasAny([linkedShopId()]))
+      return isSignedIn() && (
+        (orderData.shopId is string && isShopMember(orderData.shopId)) ||
+        (
+          linkedShopId() != "" &&
+          orderData.shopIds is list &&
+          orderData.shopIds.hasAny([linkedShopId()])
+        )
       );
     }
 
@@ -98,12 +134,23 @@ service cloud.firestore {
       allow delete: if false;
 
       match /fcm_tokens/{tokenId} {
-        allow read, create, update, delete: if isSelf(uid);
+        allow read, create, update, delete: if isSelf(uid) &&
+          (
+            !request.resource.data.keys().hasAny(["token"]) ||
+            (
+              request.resource.data.token is string &&
+              request.resource.data.token.size() >= 20
+            )
+          );
       }
     }
 
     match /shop_applications/{applicationId} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin() || (
+        isSignedIn() &&
+        resource.data.ownerUid is string &&
+        resource.data.ownerUid == request.auth.uid
+      );
 
       allow create: if isSignedIn() &&
         request.resource.data.ownerUid == request.auth.uid &&
@@ -113,17 +160,44 @@ service cloud.firestore {
     }
 
     match /shops/{shopId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        isShopMember(shopId) ||
+        resource.data.approved == true ||
+        resource.data.isApproved == true ||
+        resource.data.isActive == true
+      );
       allow create, update, delete: if isAdmin();
     }
 
     match /shop_users/{mappingId} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin() || (
+        isSignedIn() &&
+        (
+          mappingId == request.auth.uid ||
+          (
+            resource.data.uid is string &&
+            resource.data.uid == request.auth.uid
+          )
+        )
+      );
       allow create, update, delete: if isAdmin();
     }
 
     match /products/{productId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        (
+          (
+            !(resource.data.keys().hasAny(["isActive"])) ||
+            resource.data.isActive == true
+          ) &&
+          (
+            (resource.data.shopId is string && isApprovedShop(resource.data.shopId)) ||
+            (resource.data.shopId is string && isShopMember(resource.data.shopId))
+          )
+        )
+      );
 
       allow create: if isSignedIn() &&
         requestProductShopId() != "" &&
@@ -158,7 +232,15 @@ service cloud.firestore {
     }
 
     match /purchase_requests/{requestId} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin() || (
+        isSignedIn() && (
+          resource.data.userId == request.auth.uid ||
+          (
+            resource.data.shopId is string &&
+            isShopMember(resource.data.shopId)
+          )
+        )
+      );
 
       allow create: if isSignedIn() &&
         request.resource.data.userId == request.auth.uid &&
